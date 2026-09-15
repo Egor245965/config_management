@@ -10,10 +10,7 @@ def get_prompt():
 
 def execute_command(command, args):
     if command == "ls":
-        if len(args) > 1:
-            print("Ошибка: ls принимает не более одного аргумента")
-        else:
-            print("ls", args)
+        print("ls", args)
     elif command == "cd":
         if len(args) > 1:
             print("Ошибка: cd принимает не более одного аргумента")
