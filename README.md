@@ -20,3 +20,10 @@
 
 ```bash
 python src/emulator.py
+
+## Тестирование
+
+Для запуска автоматических тестов:
+
+```bash
+run_tests.bat

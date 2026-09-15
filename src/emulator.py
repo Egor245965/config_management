@@ -25,6 +25,14 @@ def execute_command(command, args):
         print(f"Ошибка: неизвестная команда '{command}'")
     return True
 
+def parse_command(line):
+    parts = shlex.split(line)
+
+    command = parts[0]
+    args = parts[1:]
+
+    return command, args
+
 def main():
 
     while True:
@@ -34,15 +42,13 @@ def main():
 
         try:
 
-            parts = shlex.split(line)
+            command, args = parse_command(line)
 
         except ValueError:
 
             print("Ошибка: некорректные кавычки")
             continue
 
-        command = parts[0]
-        args = parts[1:]
 
         if not execute_command(command, args):
             break
