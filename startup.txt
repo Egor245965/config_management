@@ -1,0 +1,10 @@
+# Проверка стартового скрипта
+
+ls
+cd home
+cd "My Documents"
+
+# Проверка ошибок
+abracadabra
+cd home documents
+cd "Broken
