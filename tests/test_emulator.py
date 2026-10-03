@@ -129,6 +129,49 @@ class TestEmulator(unittest.TestCase):
             "Ошибка стартового скрипта",
             output.getvalue(),
         )
+    
+    def test_load_vfs(self):
+        vfs = load_vfs("vfs/minimal.zip")
+
+        self.assertIsNotNone(vfs)
+        self.assertIn("motd", vfs["files"])
+    
+    def test_load_vfs_not_found(self):
+        output = StringIO()
+
+        with redirect_stdout(output):
+            vfs = load_vfs("vfs/no_file.zip")
+
+        self.assertIsNone(vfs)
+        self.assertIn(
+            "Ошибка загрузки VFS: файл не найден",
+            output.getvalue(),
+        )
+
+    def test_show_motd(self):
+        vfs = load_vfs("vfs/minimal.zip")
+
+        output = StringIO()
+
+        with redirect_stdout(output):
+            show_motd(vfs)
+
+        self.assertIn(
+            "Добро пожаловать",
+            output.getvalue(),
+        )
+    
+    def test_load_vfs_bad_zip(self):
+        output = StringIO()
+
+        with redirect_stdout(output):
+            vfs = load_vfs("vfs/broken.zip")
+
+        self.assertIsNone(vfs)
+        self.assertIn(
+            "Ошибка загрузки VFS: неверный формат ZIP",
+            output.getvalue(),
+        )
 
 
 if __name__ == "__main__":

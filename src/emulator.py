@@ -1,7 +1,9 @@
 import argparse
+import base64
 import getpass
-import socket
 import shlex
+import socket
+import zipfile
 
 def parse_arguments(args = None):
     parser = argparse.ArgumentParser(
@@ -76,12 +78,77 @@ def run_startup_script(script_path):
         print(f"Ошибка стартового скрипта: {error}")
 
     return True
+def load_vfs(vfs_path):
+    try:
+        with zipfile.ZipFile(vfs_path, "r") as archive:
+            files = {}
+            directories = {""}
+
+            for info in archive.infolist():
+                path = info.filename.rstrip("/")
+
+                if not path:
+                    continue
+
+                if info.is_dir():
+                    directories.add(path)
+                    continue
+
+                parts = path.split("/")
+
+                for i in range(1, len(parts)):
+                    directory = "/".join(parts[:i])
+                    directories.add(directory)
+
+                data = archive.read(info.filename)
+
+                files[path] = base64.b64encode(data).decode("ascii")
+
+            return {
+                "files": files,
+                "directories": directories,
+            }
+
+    except FileNotFoundError:
+        print("Ошибка загрузки VFS: файл не найден")
+
+    except zipfile.BadZipFile:
+        print("Ошибка загрузки VFS: неверный формат ZIP")
+
+    return None
+
+def show_motd(vfs):
+    motd_data = vfs["files"].get("motd")
+
+    if motd_data is None:
+        return
+
+    try:
+        data = base64.b64decode(motd_data)
+        message = data.decode("utf-8")
+
+    except UnicodeDecodeError:
+        print("Ошибка: файл motd содержит некорректный текст")
+        return
+
+    print(message)
 
 def main():
     config = parse_arguments()
     print("Параметры эмулятора:")
     print(f"VFS: {config.vfs}")
     print(f"Старотовый скрипт: {config.script}")
+
+    vfs = None
+
+    if config.vfs:
+        vfs = load_vfs(config.vfs)
+
+        if vfs is None:
+            return
+
+        print(f"VFS загружена: {config.vfs}")
+        show_motd(vfs)
 
     if config.script:
         if not run_startup_script(config.script):

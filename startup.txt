@@ -1,10 +1,21 @@
-# Проверка стартового скрипта
+# Проверка команд Этапа 1
 
 ls
+ls home documents
+
+cd
 cd home
 cd "My Documents"
 
 # Проверка ошибок
+
 abracadabra
 cd home documents
 cd "Broken
+
+# Проверка exit с неправильным аргументом
+
+exit hello
+
+# Корректный выход
+exit
