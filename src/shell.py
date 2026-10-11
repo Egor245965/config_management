@@ -1,4 +1,4 @@
-"""Commands for stage 4 of variant 7."""
+"""Commands for stages 4 and 5 of variant 7."""
 
 import getpass
 import re
@@ -28,6 +28,30 @@ def options(args, allowed):
     return flags, paths
 
 
+def change_mode(mode, expression):
+    """Apply an octal mode or symbolic u/g/o/a +/-/= rwx clauses."""
+    if re.fullmatch(r"[0-7]{3,4}", expression):
+        return int(expression, 8)
+    for clause in expression.split(","):
+        match = re.fullmatch(r"([ugoa]*)([+=-])([rwx]*)", clause)
+        if not match:
+            raise ValueError(f"неверный режим прав: {expression}")
+        who, operator, permissions = match.groups()
+        who = "ugo" if not who or "a" in who else who
+        bits = sum(bit for char, bit in zip("rwx", (4, 2, 1))
+                   if char in permissions)
+        for group, shift in (("u", 6), ("g", 3), ("o", 0)):
+            if group in who:
+                mask = bits << shift
+                if operator == "=":
+                    mode = (mode & ~(7 << shift)) | mask
+                elif operator == "+":
+                    mode |= mask
+                else:
+                    mode &= ~mask
+    return mode
+
+
 class Shell:
     """One emulated login session shared by the script and REPL."""
 
@@ -44,7 +68,7 @@ class Shell:
     def execute(self, command, args):
         """Report command errors; return False only for a valid exit."""
         commands = {name: getattr(self, name) for name in
-                    ("ls", "cd", "who", "head")}
+                    ("ls", "cd", "who", "head", "mkdir", "chmod")}
         try:
             if command == "exit":
                 if args:
@@ -121,3 +145,38 @@ class Shell:
                 print("".join(text.splitlines(keepends=True)[:count]), end="")
             except ValueError as error:
                 print(f"Ошибка: head: {error}")
+
+    def mkdir(self, args):
+        """Create one or more directories; -p creates parent directories."""
+        flags, paths = options(args, "p")
+        if not paths:
+            raise ValueError("mkdir: укажите каталог")
+        for value in paths:
+            try:
+                self.vfs.mkdir(value, "p" in flags)
+            except ValueError as error:
+                print(f"Ошибка: mkdir: {error}")
+
+    def chmod(self, args):
+        """Change mode bits in memory; -R also changes descendants."""
+        recursive = bool(args and args[0] == "-R")
+        args = args[1:] if recursive else args
+        if args and args[0] == "--":
+            args = args[1:]
+        if len(args) < 2:
+            raise ValueError("chmod: ожидаются РЕЖИМ и ПУТЬ")
+        expression = args[0]
+        change_mode(0, expression)
+        for value in args[1:]:
+            try:
+                path = self.vfs.resolve(value)
+                targets = [path]
+                if recursive and path in self.vfs.directories:
+                    prefix = path + "/" if path else ""
+                    targets += [item for item in self.vfs.modes
+                                if item != path and item.startswith(prefix)]
+                for item in targets:
+                    old_mode = self.vfs.modes[item]
+                    self.vfs.modes[item] = change_mode(old_mode, expression)
+            except ValueError as error:
+                print(f"Ошибка: chmod: {error}")

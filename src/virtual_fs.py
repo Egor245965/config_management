@@ -81,3 +81,32 @@ class VirtualFS:
         except UnicodeDecodeError as error:
             message = f"файл не является UTF-8 текстом: /{path}"
             raise ValueError(message) from error
+
+    def mkdir(self, value, parents=False):
+        """Create directories in memory, optionally with missing parents."""
+        if not value:
+            raise ValueError("пустой путь")
+        if not parents:
+            path = self.resolve(value.rstrip("/") or "/", True)
+            self.create_directory(path, False)
+            return
+        prefix = "/" if value.startswith("/") else ""
+        for part in value.split("/"):
+            if not part:
+                continue
+            prefix += part
+            path = self.resolve(prefix, True)
+            self.create_directory(path, True)
+            prefix += "/"
+
+    def create_directory(self, path, exist_ok):
+        """Create a canonical directory after checking its parent."""
+        if self.exists(path):
+            if exist_ok and path in self.directories:
+                return
+            raise ValueError(f"путь уже существует: /{path}")
+        parent = path.rpartition("/")[0]
+        self.require_directory(parent)
+        self.require(parent, 0o300)
+        self.directories.add(path)
+        self.modes[path] = 0o755

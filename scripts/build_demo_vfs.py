@@ -1,4 +1,4 @@
-"""Generate a disposable ZIP fixture for the stage 4 demos."""
+"""Generate a disposable ZIP fixture for the stage 4 and 5 demos."""
 
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -10,7 +10,7 @@ def main():
     output = root / "vfs" / "demo.zip"
     output.parent.mkdir(exist_ok=True)
     entries = {
-        "motd": "Демонстрация этапа 4, вариант 7.\n",
+        "motd": "Демонстрация этапов 4 и 5, вариант 7.\n",
         "lines.txt": "".join(f"Строка {i}\n" for i in range(1, 16)),
         "home/user/documents/file.txt": "Первая строка\nВторая строка\n",
         "My Documents/notes.txt": "Файл с пробелами в пути\n",

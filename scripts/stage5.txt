@@ -1,0 +1,43 @@
+# Запуск с vfs/demo.zip. Создание каталогов только в памяти.
+mkdir work "New Documents"
+mkdir -p work/a/b
+mkdir -p work/a/b
+cd work
+mkdir child
+ls -l
+cd /
+mkdir work
+mkdir missing/child
+mkdir lines.txt
+mkdir
+mkdir -z example
+mkdir -- -directory
+ls -- -directory
+# Числовые и символьные права; результаты видны через ls -l.
+chmod 600 lines.txt empty.txt
+ls -l lines.txt empty.txt
+chmod u+x,g+r,o= lines.txt
+ls -l lines.txt
+chmod a-rwx lines.txt
+head lines.txt
+chmod u=rw lines.txt
+head -n 1 lines.txt
+chmod -R 700 work
+ls -l work work/a
+chmod -R go+rx work
+ls -l work work/a
+chmod u-w work
+mkdir work/denied
+chmod u+w work
+mkdir work/allowed
+chmod u-x work
+cd work
+chmod u+x work
+cd work
+cd
+chmod 888 lines.txt
+chmod u+z lines.txt
+chmod 755 missing
+chmod
+ls -al /
+exit

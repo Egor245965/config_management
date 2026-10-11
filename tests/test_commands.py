@@ -1,4 +1,4 @@
-"""Behavioral tests for stage 4."""
+"""Behavioral tests for stages 4 and 5."""
 
 import base64
 import tempfile
@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.emulator import load_vfs, run_repl, run_startup_script
-from src.shell import Shell
+from src.shell import Shell, change_mode
 
 
 class TestCommands(unittest.TestCase):
@@ -96,6 +96,91 @@ class TestCommands(unittest.TestCase):
         self.command("cd", "My Documents")
         self.assertEqual(self.command("head", "test.txt"), "spaces\n")
 
+    def test_invalid_arguments(self):
+        cases = [("ls", ["-z"]), ("who", ["x"]), ("head", []),
+                 ("head", ["-n", "-1", "lines.txt"]),
+                 ("head", ["-n", "x", "lines.txt"]),
+                 ("head", ["-n"]), ("head", ["binary"]),
+                 ("head", ["home"]), ("head", ["lines.txt/"]),
+                 ("mkdir", []), ("mkdir", ["-x", "dir"]),
+                 ("chmod", []), ("chmod", ["888", "lines.txt"]),
+                 ("chmod", ["u+z", "lines.txt"])]
+        for name, args in cases:
+            with self.subTest(name=name, args=args):
+                self.assertIn("Ошибка", self.command(name, *args))
+
+    def test_mkdir_multiple_spaces_and_relative_paths(self):
+        self.command("mkdir", "one", "two words")
+        self.command("cd", "one")
+        self.command("mkdir", "child/")
+        self.assertIn("one/child", self.shell.vfs.directories)
+        self.assertIn("two words", self.shell.vfs.directories)
+        self.assertEqual(self.shell.vfs.modes["one"], 0o755)
+
+    def test_mkdir_parents_and_existing(self):
+        self.command("mkdir", "-p", "/new/a/b/")
+        self.assertIn("new/a/b", self.shell.vfs.directories)
+        self.assertEqual(self.command("mkdir", "-p", "new/a"), "")
+        for path in ("new/a", "lines.txt", "missing/child", ""):
+            self.assertIn("Ошибка", self.command("mkdir", path))
+        self.assertIn("Ошибка", self.command("mkdir", "-p", "lines.txt/x"))
+
+    def test_option_terminator(self):
+        self.command("mkdir", "--", "-dir")
+        self.assertIn("-dir", self.command("ls", "-a"))
+        self.assertEqual(self.command("ls", "--", "-dir"), "")
+
+    def test_chmod_numeric_and_symbolic(self):
+        self.command("chmod", "600", "lines.txt", "empty.txt")
+        self.assertEqual(self.shell.vfs.modes["lines.txt"], 0o600)
+        self.command("chmod", "u+x,g+r,o=rx", "lines.txt")
+        self.assertEqual(self.shell.vfs.modes["lines.txt"], 0o745)
+        self.command("chmod", "a-rwx", "lines.txt")
+        self.assertEqual(self.shell.vfs.modes["lines.txt"], 0)
+        self.command("chmod", "u=rw", "lines.txt")
+        self.assertIn("-rw-------", self.command("ls", "-l", "lines.txt"))
+
+    def test_chmod_recursive_and_similar_prefix(self):
+        self.command("mkdir", "home2")
+        self.command("chmod", "-R", "700", "home")
+        for path in ("home", "home/user", "home/user/note.txt"):
+            self.assertEqual(self.shell.vfs.modes[path], 0o700)
+        self.assertEqual(self.shell.vfs.modes["home2"], 0o755)
+
+    def test_chmod_invalid_does_not_mutate(self):
+        original = self.shell.vfs.modes.copy()
+        self.command("chmod", "u+x,bad", "lines.txt")
+        self.command("chmod", "600", "missing")
+        self.assertEqual(self.shell.vfs.modes, original)
+
+    def test_permissions_read_write_and_search(self):
+        self.command("chmod", "000", "lines.txt")
+        self.assertIn("доступ запрещён", self.command("head", "lines.txt"))
+        self.command("chmod", "500", "home")
+        self.assertIn("доступ запрещён", self.command("mkdir", "home/new"))
+        self.command("chmod", "000", "home")
+        self.assertIn("доступ запрещён", self.command("cd", "home"))
+        self.assertIn("доступ запрещён", self.command("ls", "home"))
+        self.command("chmod", "755", "home")
+        self.assertEqual(self.command("cd", "home"), "")
+
+    def test_chmod_mode_parser(self):
+        self.assertEqual(change_mode(0o644, "0755"), 0o755)
+        self.assertEqual(change_mode(0o777, "go="), 0o700)
+        self.assertEqual(change_mode(0o644, "+x"), 0o755)
+
+    def test_script_state_comments_errors_and_exit(self):
+        script = ('# comment\ncd home # inline\nmkdir work\n'
+                  'unknown\ncd "bad\ncd work\nexit\nmkdir ignored\n')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "startup.txt"
+            path.write_text(script, encoding="utf-8")
+            with redirect_stdout(StringIO()) as output:
+                result = run_startup_script(path, self.shell)
+        self.assertFalse(result)
+        self.assertEqual(self.shell.vfs.cwd, "home/work")
+        self.assertNotIn("home/work/ignored", self.shell.vfs.directories)
+        self.assertIn("некорректные кавычки", output.getvalue())
 
     def test_repl_eof(self):
         with patch("builtins.input", side_effect=EOFError):
@@ -132,6 +217,19 @@ class TestArchive(unittest.TestCase):
         path = self.archive({"a": "file", "a/b": "child"})
         with redirect_stdout(StringIO()):
             self.assertIsNone(load_vfs(path))
+
+    def test_commands_leave_archive_and_host_unchanged(self):
+        path = self.archive({"file.txt": "first\nsecond\n"})
+        before = path.read_bytes()
+        shell = Shell(load_vfs(path))
+        with redirect_stdout(StringIO()):
+            shell.execute("mkdir", ["virtual-only"])
+            shell.execute("chmod", ["000", "file.txt"])
+        self.assertEqual(path.read_bytes(), before)
+        self.assertFalse((path.parent / "virtual-only").exists())
+        reloaded = Shell(load_vfs(path))
+        self.assertNotIn("virtual-only", reloaded.vfs.directories)
+        self.assertEqual(reloaded.vfs.modes["file.txt"], 0o644)
 
 
 if __name__ == "__main__":
