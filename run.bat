@@ -1,2 +1,4 @@
 @echo off
-python src\emulator.py
+setlocal
+cd /d "%~dp0"
+python src\emulator.py %*

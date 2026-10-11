@@ -5,6 +5,11 @@ import shlex
 import socket
 import zipfile
 
+if __package__:
+    from .shell import Shell
+else:
+    from shell import Shell
+
 def parse_arguments(args = None):
     parser = argparse.ArgumentParser(
         description="Эмулятор командной оболочки"
@@ -28,32 +33,23 @@ def get_prompt():
 
     return f"{username}@{hostname}:~$ "
 
-def execute_command(command, args):
-    if command == "ls":
-        print("ls", args)
-    elif command == "cd":
-        if len(args) > 1:
-            print("Ошибка: cd принимает не более одного аргумента")
-        else:
-            print("cd", args)
-    elif command == "exit":
-        if args:
-            print("Ошибка: exit не принимает аргументы")
-            return True
-        return False
-    else:
-        print(f"Ошибка: неизвестная команда '{command}'")
-    return True
+def execute_command(command, args, shell=None):
+    """Execute in a supplied session, or a fresh empty session."""
+    return (shell if shell is not None else Shell()).execute(command, args)
 
 def parse_command(line):
-    parts = shlex.split(line)
+    parts = shlex.split(line, comments=True)
+
+    if not parts:
+        return "", []
 
     command = parts[0]
     args = parts[1:]
 
     return command, args
 
-def run_startup_script(script_path):
+def run_startup_script(script_path, shell=None):
+    shell = shell if shell is not None else Shell()
     try:
         with open(script_path, "r", encoding="utf-8") as file:
             for line in file:
@@ -62,7 +58,7 @@ def run_startup_script(script_path):
                 if not line or line.startswith("#"):
                     continue
 
-                print(f"{get_prompt()}{line}")
+                print(f"{shell.prompt()}{line}")
 
                 try:
                     command, args = parse_command(line)
@@ -71,49 +67,47 @@ def run_startup_script(script_path):
                     print("Ошибка: некорректные кавычки")
                     continue
 
-                if not execute_command(command, args):
+                if command and not execute_command(command, args, shell):
                     return False
 
-    except OSError as error:
+    except (OSError, UnicodeError) as error:
         print(f"Ошибка стартового скрипта: {error}")
 
     return True
+def read_archive(archive):
+    """Build an in-memory VFS, rejecting ambiguous ZIP paths."""
+    files, directories = {}, {""}
+    for info in archive.infolist():
+        path = info.orig_filename.rstrip("/")
+        if not path:
+            continue
+        parts = path.split("/")
+        if "\\" in path or any(p in ("", ".", "..") for p in parts):
+            raise ValueError(f"недопустимый путь в ZIP: {info.filename}")
+        for index in range(1, len(parts)):
+            directories.add("/".join(parts[:index]))
+        if info.is_dir():
+            directories.add(path)
+        else:
+            files[path] = base64.b64encode(archive.read(info)).decode("ascii")
+    if files.keys() & directories:
+        raise ValueError("файл и каталог имеют одинаковый путь")
+    return {"files": files, "directories": directories}
+
+
 def load_vfs(vfs_path):
     try:
         with zipfile.ZipFile(vfs_path, "r") as archive:
-            files = {}
-            directories = {""}
-
-            for info in archive.infolist():
-                path = info.filename.rstrip("/")
-
-                if not path:
-                    continue
-
-                if info.is_dir():
-                    directories.add(path)
-                    continue
-
-                parts = path.split("/")
-
-                for i in range(1, len(parts)):
-                    directory = "/".join(parts[:i])
-                    directories.add(directory)
-
-                data = archive.read(info.filename)
-
-                files[path] = base64.b64encode(data).decode("ascii")
-
-            return {
-                "files": files,
-                "directories": directories,
-            }
+            return read_archive(archive)
 
     except FileNotFoundError:
         print("Ошибка загрузки VFS: файл не найден")
 
     except zipfile.BadZipFile:
         print("Ошибка загрузки VFS: неверный формат ZIP")
+
+    except (OSError, ValueError, RuntimeError, NotImplementedError) as error:
+        print(f"Ошибка загрузки VFS: {error}")
 
     return None
 
@@ -137,7 +131,7 @@ def main():
     config = parse_arguments()
     print("Параметры эмулятора:")
     print(f"VFS: {config.vfs}")
-    print(f"Старотовый скрипт: {config.script}")
+    print(f"Стартовый скрипт: {config.script}")
 
     vfs = None
 
@@ -150,12 +144,22 @@ def main():
         print(f"VFS загружена: {config.vfs}")
         show_motd(vfs)
 
+    shell = Shell(vfs)
     if config.script:
-        if not run_startup_script(config.script):
+        if not run_startup_script(config.script, shell):
             return
 
+    run_repl(shell)
+
+
+def run_repl(shell):
+    """Read commands until exit, EOF or a keyboard interrupt."""
     while True:
-        line = input(get_prompt())
+        try:
+            line = input(shell.prompt())
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
         if not line.strip():
             continue
 
@@ -169,9 +173,9 @@ def main():
             continue
 
 
-        if not execute_command(command, args):
+        if command and not execute_command(command, args, shell):
             break
-        
+
 
 if __name__ == '__main__':
     main()

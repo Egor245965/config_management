@@ -6,9 +6,11 @@ from io import StringIO
 
 from src.emulator import (
     execute_command,
+    load_vfs,
     parse_arguments,
     parse_command,
     run_startup_script,
+    show_motd,
 )
 
 class TestEmulator(unittest.TestCase):
@@ -106,9 +108,9 @@ class TestEmulator(unittest.TestCase):
                 result = run_startup_script(script_path)
 
             self.assertTrue(result)
-            self.assertIn("ls []", output.getvalue())
+            self.assertIn("$ ls", output.getvalue())
             self.assertIn(
-                "cd ['My Documents']",
+                "путь не найден: My Documents",
                 output.getvalue(),
             )
             self.assertNotIn(
@@ -129,13 +131,13 @@ class TestEmulator(unittest.TestCase):
             "Ошибка стартового скрипта",
             output.getvalue(),
         )
-    
+
     def test_load_vfs(self):
         vfs = load_vfs("vfs/minimal.zip")
 
         self.assertIsNotNone(vfs)
         self.assertIn("motd", vfs["files"])
-    
+
     def test_load_vfs_not_found(self):
         output = StringIO()
 
@@ -160,7 +162,7 @@ class TestEmulator(unittest.TestCase):
             "Добро пожаловать",
             output.getvalue(),
         )
-    
+
     def test_load_vfs_bad_zip(self):
         output = StringIO()
 
@@ -176,4 +178,3 @@ class TestEmulator(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-    

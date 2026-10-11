@@ -1,3 +1,4 @@
 @echo off
-python %~dp0\..\src\emulator.py --vfs vfs.zip --script nonexistent.txt
-pause
+setlocal
+cd /d "%~dp0.."
+python src\emulator.py --vfs vfs\files.zip --script nonexistent.txt

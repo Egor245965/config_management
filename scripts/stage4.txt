@@ -1,0 +1,36 @@
+# Запуск с vfs/demo.zip. Ошибки ниже преднамеренные.
+ls
+ls -a
+ls -l
+ls -al /home /lines.txt
+ls /missing /home
+ls -z
+cd /home/user/documents
+ls . ..
+head file.txt
+cd ..
+cd ./documents
+cd /
+cd "My Documents"
+head notes.txt
+cd
+cd missing
+cd lines.txt
+cd home user
+cd "Broken
+who
+who extra
+head lines.txt
+head -n 2 lines.txt
+head -n 0 lines.txt
+head -n 100 lines.txt
+head empty.txt lines.txt
+head missing lines.txt
+head binary.bin
+head home
+head -n bad lines.txt
+head -n -1 lines.txt
+head
+unknown
+exit extra
+exit
