@@ -85,6 +85,12 @@ class TestCommands(unittest.TestCase):
         text = self.command("head", "-n", "1", "home/user/note.txt")
         self.assertEqual(text, "Привет\n")
 
+    def test_head_count_requires_number_and_file(self):
+        cases = [("-n",), ("-n", "2"), ("-n", "bad", "lines.txt")]
+        for args in cases:
+            with self.subTest(args=args):
+                self.assertIn("Ошибка", self.command("head", *args))
+
     def test_head_empty_unterminated_and_multiple_files(self):
         self.assertEqual(self.command("head", "empty.txt"), "")
         self.assertEqual(self.command("head", "no-newline.txt"), "one\ntwo")

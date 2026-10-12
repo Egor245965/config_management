@@ -11,6 +11,8 @@ if __package__:
 else:
     from virtual_fs import VirtualFS
 
+HEAD_COUNT_ARGUMENTS = 3
+
 
 def options(args, allowed):
     """Parse short switches, preserving operands after --."""
@@ -107,7 +109,8 @@ class Shell:
         """Print ten lines by default, or a nonnegative count via -n."""
         count = 10
         if args and args[0] == "-n":
-            if len(args) < 3 or not re.fullmatch(r"[0-9]+", args[1]):
+            if (len(args) < HEAD_COUNT_ARGUMENTS
+                    or not re.fullmatch(r"[0-9]+", args[1])):
                 raise ValueError("head: ожидается -n ЧИСЛО ФАЙЛ")
             count, args = int(args[1]), args[2:]
         _, paths = options(args, "")
