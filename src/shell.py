@@ -11,6 +11,9 @@ if __package__:
 else:
     from virtual_fs import VirtualFS
 
+HEAD_COUNT_ARGUMENTS = 3
+CHMOD_MIN_ARGUMENTS = 2
+
 
 def options(args, allowed):
     """Parse short switches, preserving operands after --."""
@@ -33,23 +36,46 @@ def change_mode(mode, expression):
     if re.fullmatch(r"[0-7]{3,4}", expression):
         return int(expression, 8)
     for clause in expression.split(","):
-        match = re.fullmatch(r"([ugoa]*)([+=-])([rwx]*)", clause)
-        if not match:
-            raise ValueError(f"неверный режим прав: {expression}")
-        who, operator, permissions = match.groups()
-        who = "ugo" if not who or "a" in who else who
-        bits = sum(bit for char, bit in zip("rwx", (4, 2, 1))
-                   if char in permissions)
+        who, operator, bits = parse_mode_clause(clause)
         for group, shift in (("u", 6), ("g", 3), ("o", 0)):
             if group in who:
-                mask = bits << shift
-                if operator == "=":
-                    mode = (mode & ~(7 << shift)) | mask
-                elif operator == "+":
-                    mode |= mask
-                else:
-                    mode &= ~mask
+                mode = apply_mode_bits(mode, operator, bits, shift)
     return mode
+
+
+def parse_mode_clause(clause):
+    """Parse the groups, operation and permission bits of one clause."""
+    match = re.fullmatch(r"([ugoa]*)([+=-])([rwx]*)", clause)
+    if not match:
+        raise ValueError(f"неверный режим прав: {clause}")
+    who, operator, permissions = match.groups()
+    who = "ugo" if not who or "a" in who else who
+    bits = sum(bit for char, bit in zip("rwx", (4, 2, 1))
+               if char in permissions)
+    return who, operator, bits
+
+
+def apply_mode_bits(mode, operator, bits, shift):
+    """Apply one permission operation to a single owner/group/other field."""
+    mask = bits << shift
+    if operator == "=":
+        return (mode & ~(7 << shift)) | mask
+    if operator == "+":
+        return mode | mask
+    return mode & ~mask
+
+
+def parse_chmod_arguments(args):
+    """Parse recursive mode, the optional separator and chmod operands."""
+    recursive = bool(args and args[0] == "-R")
+    args = args[1:] if recursive else args
+    if args and args[0] == "--":
+        args = args[1:]
+    if len(args) < CHMOD_MIN_ARGUMENTS:
+        raise ValueError("chmod: ожидаются РЕЖИМ и ПУТЬ")
+    expression = args[0]
+    change_mode(0, expression)
+    return recursive, expression, args[1:]
 
 
 class Shell:
@@ -131,7 +157,8 @@ class Shell:
         """Print ten lines by default, or a nonnegative count via -n."""
         count = 10
         if args and args[0] == "-n":
-            if len(args) < 3 or not re.fullmatch(r"[0-9]+", args[1]):
+            if (len(args) < HEAD_COUNT_ARGUMENTS
+                    or not re.fullmatch(r"[0-9]+", args[1])):
                 raise ValueError("head: ожидается -n ЧИСЛО ФАЙЛ")
             count, args = int(args[1]), args[2:]
         _, paths = options(args, "")
@@ -159,24 +186,21 @@ class Shell:
 
     def chmod(self, args):
         """Change mode bits in memory; -R also changes descendants."""
-        recursive = bool(args and args[0] == "-R")
-        args = args[1:] if recursive else args
-        if args and args[0] == "--":
-            args = args[1:]
-        if len(args) < 2:
-            raise ValueError("chmod: ожидаются РЕЖИМ и ПУТЬ")
-        expression = args[0]
-        change_mode(0, expression)
-        for value in args[1:]:
+        recursive, expression, paths = parse_chmod_arguments(args)
+        for value in paths:
             try:
                 path = self.vfs.resolve(value)
-                targets = [path]
-                if recursive and path in self.vfs.directories:
-                    prefix = path + "/" if path else ""
-                    targets += [item for item in self.vfs.modes
-                                if item != path and item.startswith(prefix)]
-                for item in targets:
+                for item in self.chmod_targets(path, recursive):
                     old_mode = self.vfs.modes[item]
                     self.vfs.modes[item] = change_mode(old_mode, expression)
             except ValueError as error:
                 print(f"Ошибка: chmod: {error}")
+
+    def chmod_targets(self, path, recursive):
+        """Select one path or its complete virtual subtree for chmod."""
+        if not recursive or path not in self.vfs.directories:
+            return [path]
+        prefix = path + "/" if path else ""
+        descendants = [item for item in self.vfs.modes
+                       if item != path and item.startswith(prefix)]
+        return [path] + descendants

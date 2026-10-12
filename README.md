@@ -138,11 +138,14 @@ head -n 2 lines.txt
   `main` связывает запуск и `run_repl`. `get_prompt` оставлен для совместимости
   с первым этапом; рабочее приглашение формируется методом `Shell.prompt`.
 - `src/shell.py`: `Shell` хранит сеанс и реализует команды;
-  `options` разбирает короткие опции; `change_mode` вычисляет права.
+  `options` разбирает короткие опции; `change_mode` вычисляет права через
+  `parse_mode_clause` и `apply_mode_bits`. `parse_chmod_arguments` проверяет
+  аргументы, а `Shell.chmod_targets` выбирает объекты для изменения прав.
 - `src/virtual_fs.py`: `VirtualFS` хранит данные, разрешает пути (`resolve`),
   проверяет доступ (`require`, `require_directory`), перечисляет элементы
   (`children`), читает текст (`read_text`), создаёт папки (`mkdir`,
   `create_directory`), проверяет существование (`exists`).
+  `resolve_component` обрабатывает один компонент виртуального пути.
 - `tests/test_emulator.py`: проверки этапов 1–3 и совместимости.
 - `tests/test_commands.py`: проверки этапов 4–5, путей, прав и неизменности ZIP.
 - `scripts/build_demo_vfs.py`: генератор демонстрационной VFS; ZIP игнорируется Git.

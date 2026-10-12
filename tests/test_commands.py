@@ -85,6 +85,12 @@ class TestCommands(unittest.TestCase):
         text = self.command("head", "-n", "1", "home/user/note.txt")
         self.assertEqual(text, "Привет\n")
 
+    def test_head_count_requires_number_and_file(self):
+        cases = [("-n",), ("-n", "2"), ("-n", "bad", "lines.txt")]
+        for args in cases:
+            with self.subTest(args=args):
+                self.assertIn("Ошибка", self.command("head", *args))
+
     def test_head_empty_unterminated_and_multiple_files(self):
         self.assertEqual(self.command("head", "empty.txt"), "")
         self.assertEqual(self.command("head", "no-newline.txt"), "one\ntwo")
@@ -168,6 +174,16 @@ class TestCommands(unittest.TestCase):
         self.assertEqual(change_mode(0o644, "0755"), 0o755)
         self.assertEqual(change_mode(0o777, "go="), 0o700)
         self.assertEqual(change_mode(0o644, "+x"), 0o755)
+
+    def test_chmod_options_require_mode_and_path(self):
+        for args in [("-R",), ("--",), ("-R", "--", "755")]:
+            with self.subTest(args=args):
+                self.assertIn("Ошибка", self.command("chmod", *args))
+        self.assertEqual(self.command("chmod", "--", "600", "lines.txt"),
+                         "")
+        self.command("chmod", "-R", "--", "700", "home")
+        self.assertEqual(self.shell.vfs.modes["lines.txt"], 0o600)
+        self.assertEqual(self.shell.vfs.modes["home/user/note.txt"], 0o700)
 
     def test_script_state_comments_errors_and_exit(self):
         script = ('# comment\ncd home # inline\nmkdir work\n'

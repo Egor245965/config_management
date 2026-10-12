@@ -36,20 +36,24 @@ class VirtualFS:
         parts = [part for part in parts if part]
         components = value.split("/")
         for index, part in enumerate(components):
-            parent = "/".join(parts)
-            self.require_directory(parent)
-            if part == "..":
-                parts = parts[:-1]
-            elif part not in ("", "."):
-                parts.append(part)
+            parts = self.resolve_component(parts, part)
             path = "/".join(parts)
-            if not self.exists(path):
-                if not allow_missing or index != len(components) - 1:
-                    raise ValueError(f"путь не найден: {value}")
+            missing_leaf = allow_missing and index == len(components) - 1
+            if not self.exists(path) and not missing_leaf:
+                raise ValueError(f"путь не найден: {value}")
         path = "/".join(parts)
         if value.endswith("/"):
             self.require_directory(path)
         return path
+
+    def resolve_component(self, parts, component):
+        """Traverse one path component after checking the parent directory."""
+        self.require_directory("/".join(parts))
+        if component == "..":
+            return parts[:-1]
+        if component not in ("", "."):
+            return parts + [component]
+        return parts
 
     def require_directory(self, path):
         """Require a searchable directory."""
