@@ -72,6 +72,12 @@ class TestCommands(unittest.TestCase):
                 self.assertIn("Ошибка", self.command("cd", path))
                 self.assertEqual(self.shell.vfs.cwd, "")
 
+    def test_cd_cannot_skip_missing_parent_with_dotdot(self):
+        self.command("cd", "home/user")
+        output = self.command("cd", "/missing/../home")
+        self.assertIn("Ошибка", output)
+        self.assertEqual(self.shell.vfs.cwd, "home/user")
+
     def test_who_session_identity(self):
         text = self.command("who")
         self.assertIn(self.shell.username, text)
@@ -90,6 +96,11 @@ class TestCommands(unittest.TestCase):
         for args in cases:
             with self.subTest(args=args):
                 self.assertIn("Ошибка", self.command("head", *args))
+
+    def test_head_count_with_option_terminator(self):
+        output = self.command("head", "-n", "1", "--", "lines.txt")
+        self.assertEqual(output, "line 1\n")
+        self.assertIn("Ошибка", self.command("head", "-n", "1", "--"))
 
     def test_head_empty_unterminated_and_multiple_files(self):
         self.assertEqual(self.command("head", "empty.txt"), "")
